@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}开源威胁情报智能分级搜索平台{% endblock %}</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="{% if user is defined and user %}app-body{% else %}auth-body{% endif %}">
+
+{% if user is defined and user %}
+<div class="app-shell" id="appShell">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-brand">
+      <div class="brand-mark">TI</div>
+      <div class="brand-copy">
+        <div class="brand-title">威胁情报平台</div>
+        <div class="brand-subtitle">Threat Intel Search</div>
+      </div>
+    </div>
+
+    <div class="sidebar-user">
+      <div class="sidebar-avatar">{{ user.username[:1] | upper }}</div>
+      <div class="sidebar-user-copy">
+        <div class="sidebar-user-name">{{ user.username }}</div>
+        <div class="sidebar-user-role">{% if user.role == 'admin' %}管理员{% else %}分析员{% endif %}</div>
+      </div>
+    </div>
+
+    <nav class="sidebar-nav">
+      <a href="/" class="nav-item {% if request.url.path == '/' %}active{% endif %}">
+        <span class="nav-icon">⌂</span>
+        <span class="nav-text">首页</span>
+      </a>
+
+      <a href="/history" class="nav-item {% if request.url.path == '/history' %}active{% endif %}">
+        <span class="nav-icon">◔</span>
+        <span class="nav-text">查询历史</span>
+      </a>
+
+      {% if user.role == 'admin' %}
+      <div class="nav-divider"></div>
+
+      <a href="/admin/sources" class="nav-item {% if request.url.path == '/admin/sources' %}active{% endif %}">
+        <span class="nav-icon">◎</span>
+        <span class="nav-text">情报源管理</span>
+      </a>
+
+      <a href="/admin/users" class="nav-item {% if request.url.path == '/admin/users' %}active{% endif %}">
+        <span class="nav-icon">◈</span>
+        <span class="nav-text">用户管理</span>
+      </a>
+
+      <a href="/admin/audit-logs" class="nav-item {% if request.url.path == '/admin/audit-logs' %}active{% endif %}">
+        <span class="nav-icon">▤</span>
+        <span class="nav-text">审计日志</span>
+      </a>
+      {% endif %}
+    </nav>
+
+    <div class="sidebar-footer">
+      <a href="/logout" class="nav-item nav-item-logout">
+        <span class="nav-icon">↩</span>
+        <span class="nav-text">退出登录</span>
+      </a>
+    </div>
+  </aside>
+
+  <div class="mobile-mask" id="mobileMask"></div>
+
+  <main class="main-shell" id="mainShell">
+    <header class="topbar">
+      <div class="topbar-left">
+        <button class="icon-btn mobile-menu-btn" id="mobileMenuBtn" type="button" aria-label="打开菜单">☰</button>
+        <div class="topbar-copy">
+          <h1 class="page-title">{% block page_title %}开源威胁情报智能分级搜索平台{% endblock %}</h1>
+          <p class="page-desc">{% block page_desc %}面向安全分析的开源威胁情报统一检索与管理平台{% endblock %}</p>
+        </div>
+      </div>
+
+      <div class="topbar-right">
+        <div class="topbar-chip">{% if user.role == 'admin' %}管理员{% else %}分析员{% endif %}</div>
+        <div class="topbar-chip topbar-chip-strong">{{ user.username }}</div>
+      </div>
+    </header>
+
+    <section class="page-body">
+{% else %}
+<main class="auth-shell">
+{% endif %}
+
+{% block content %}{% endblock %}
+
+{% if user is defined and user %}
+    </section>
+  </main>
+</div>
+{% else %}
+</main>
+{% endif %}
+
+<script>
+(function () {
+  const body = document.body;
+  const appShell = document.getElementById('appShell');
+  const sidebar = document.getElementById('sidebar');
+  const mobileMenuBtn = document.getElementById('mobileMenuBtn');
+  const mobileMask = document.getElementById('mobileMask');
+
+  function isMobile() {
+    return window.innerWidth <= 960;
+  }
+
+  function setDesktopCollapsed(collapsed) {
+    if (!appShell) return;
+    appShell.classList.toggle('sidebar-collapsed', collapsed);
+    try {
+      localStorage.setItem('ti_sidebar_collapsed', collapsed ? '1' : '0');
+    } catch (e) {}
+  }
+
+  function setMobileOpen(open) {
+    if (!sidebar || !mobileMask) return;
+    sidebar.classList.toggle('mobile-open', open);
+    mobileMask.classList.toggle('show', open);
+    body.classList.toggle('body-locked', open);
+  }
+
+  if (mobileMenuBtn) {
+    mobileMenuBtn.addEventListener('click', function () {
+      if (isMobile()) {
+        setMobileOpen(!sidebar.classList.contains('mobile-open'));
+      } else if (appShell) {
+        setDesktopCollapsed(!appShell.classList.contains('sidebar-collapsed'));
+      }
+    });
+  }
+
+  if (mobileMask) {
+    mobileMask.addEventListener('click', function () {
+      setMobileOpen(false);
+    });
+  }
+
+  window.addEventListener('resize', function () {
+    if (!isMobile()) {
+      setMobileOpen(false);
+    }
+  });
+
+  try {
+    if (appShell && !isMobile() && localStorage.getItem('ti_sidebar_collapsed') === '1') {
+      setDesktopCollapsed(true);
+    }
+  } catch (e) {}
+})();
+</script>
+
+{% block extra_scripts %}{% endblock %}
+</body>
+</html>

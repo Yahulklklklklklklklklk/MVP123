@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+{% block title %}用户管理 - 开源威胁情报智能分级搜索平台{% endblock %}
+{% block page_title %}用户管理{% endblock %}
+{% block page_desc %}新增、修改、删除平台用户并维护角色信息{% endblock %}
+
+{% block content %}
+<div class="stack-page">
+  <section class="hero-card section-hero">
+    <div class="hero-copy">
+      <span class="eyebrow">User Management</span>
+      <h2>平台用户与角色维护</h2>
+    </div>
+    <div class="hero-stats">
+      <div class="hero-stat">
+        <span>用户总数</span>
+        <strong>{{ users|length }}</strong>
+      </div>
+      <div class="hero-stat">
+        <span>管理员</span>
+        <strong>{{ users | selectattr("role", "equalto", "admin") | list | length }}</strong>
+      </div>
+      <div class="hero-stat">
+        <span>分析员</span>
+        <strong>{{ users | selectattr("role", "equalto", "analyst") | list | length }}</strong>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel-card">
+    <div class="panel-head">
+      <div>
+        <h3>新增用户</h3>
+        <p>创建新的管理员或分析员账号。</p>
+      </div>
+    </div>
+    <div class="panel-body">
+      <form method="post" action="/admin/users/add" class="form-grid user-create-grid">
+        <div class="field">
+          <label>用户名</label>
+          <input class="input" type="text" name="username" placeholder="请输入用户名" required>
+        </div>
+        <div class="field">
+          <label>密码</label>
+          <input class="input" type="password" name="password" placeholder="请输入初始密码" required>
+        </div>
+        <div class="field field-short">
+          <label>角色</label>
+          <select class="select" name="role" required>
+            <option value="analyst">analyst</option>
+            <option value="admin">admin</option>
+          </select>
+        </div>
+        <div class="field field-action">
+          <label>&nbsp;</label>
+          <button class="btn btn-primary btn-block" type="submit">新增用户</button>
+        </div>
+      </form>
+    </div>
+  </section>
+
+  <section class="panel-card">
+    <div class="panel-head">
+      <div>
+        <h3>用户列表</h3>
+      </div>
+    </div>
+    <div class="panel-body table-panel-body">
+      <div class="table-shell">
+        <table class="modern-table">
+          <thead>
+            <tr>
+              <th>用户</th>
+              <th>角色</th>
+              <th>用户 ID</th>
+              <th>创建时间</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in users %}
+            <tr>
+              <td>
+                <div class="table-title">{{ item.username }}</div>
+                <div class="table-subtitle">平台用户</div>
+              </td>
+              <td>
+                {% if item.role == 'admin' %}
+                <span class="tag-pill tag-pill-green">admin</span>
+                {% else %}
+                <span class="tag-pill">analyst</span>
+                {% endif %}
+              </td>
+              <td>{{ item.id }}</td>
+              <td>{{ item.created_at or '-' }}</td>
+              <td>
+                <div class="table-actions">
+                  <button class="btn btn-default btn-sm" type="button" onclick="toggleUserEditor('{{ item.id }}')">编辑</button>
+                  {% if user and user.id == item.id %}
+                  <span class="tag-pill tag-pill-red">当前账号不可删除</span>
+                  {% else %}
+                  <form method="post" action="/admin/users/{{ item.id }}/delete" onsubmit="return confirm('确认删除该用户吗？');">
+                    <button class="btn btn-danger btn-sm" type="submit">删除</button>
+                  </form>
+                  {% endif %}
+                </div>
+              </td>
+            </tr>
+            <tr class="editor-row hidden" id="user-editor-{{ item.id }}">
+              <td colspan="5">
+                <div class="editor-card">
+                  <form method="post" action="/admin/users/{{ item.id }}/update" class="form-grid user-edit-grid">
+                    <div class="field">
+                      <label>用户名</label>
+                      <input class="input" type="text" name="username" value="{{ item.username }}" required>
+                    </div>
+                    <div class="field field-short">
+                      <label>角色</label>
+                      <select class="select" name="role" required>
+                        <option value="admin" {% if item.role == 'admin' %}selected{% endif %}>admin</option>
+                        <option value="analyst" {% if item.role == 'analyst' %}selected{% endif %}>analyst</option>
+                      </select>
+                    </div>
+                    <div class="field">
+                      <label>重置密码</label>
+                      <input class="input" type="password" name="password" placeholder="留空则不修改">
+                    </div>
+                    <div class="field field-action">
+                      <label>&nbsp;</label>
+                      <div class="editor-actions">
+                        <button class="btn btn-default" type="button" onclick="toggleUserEditor('{{ item.id }}')">取消</button>
+                        <button class="btn btn-primary" type="submit">保存修改</button>
+                      </div>
+                    </div>
+                  </form>
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function toggleUserEditor(id) {
+  const row = document.getElementById(`user-editor-${id}`);
+  if (!row) return;
+  const isHidden = row.classList.contains('hidden');
+  document.querySelectorAll('tr[id^="user-editor-"]').forEach(el => el.classList.add('hidden'));
+  if (isHidden) row.classList.remove('hidden');
+}
+</script>
+{% endblock %}

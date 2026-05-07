@@ -1,0 +1,352 @@
+{% extends "base.html" %}
+{% block title %}首页 - 开源威胁情报智能分级搜索平台{% endblock %}
+{% block page_title %}统一搜索控制台{% endblock %}
+{% block page_desc %}支持单条 IOC 查询、批量检索、缓存命中显示与情报结果快速查看{% endblock %}
+
+{% block content %}
+<div class="dashboard-grid">
+  <section class="hero-card dashboard-hero">
+    <div class="hero-copy">
+      <span class="eyebrow">实时威胁检索</span>
+      <h2>多源情报统一搜索与缓存分级响应</h2>
+    </div>
+    <div class="hero-stats">
+      <div class="hero-stat">
+        <span>当前用户</span>
+        <strong>{{ user.username }}</strong>
+      </div>
+      <div class="hero-stat">
+        <span>当前角色</span>
+        <strong>{{ '管理员' if user.role == 'admin' else '分析员' }}</strong>
+      </div>
+      <div class="hero-stat">
+        <span>支持指标</span>
+        <strong>IP / 域名 / HASH</strong>
+      </div>
+    </div>
+  </section>
+
+  <div class="workbench-grid">
+    <div class="left-column">
+      <section class="panel-card">
+        <div class="panel-head">
+          <div>
+            <h3>单条查询</h3>
+          </div>
+        </div>
+        <div class="panel-body">
+          <div class="field">
+            <label>查询指标</label>
+            <div class="inline-input-group">
+              <input id="singleIndicator" class="input" type="text" placeholder="例如：8.8.8.8 / example.com / 44d88612...">
+              <button id="singleSearchBtn" class="btn btn-primary" type="button">立即查询</button>
+            </div>
+          </div>
+          <div class="quick-tags">
+            <button class="quick-tag" type="button" data-value="8.8.8.8">8.8.8.8</button>
+            <button class="quick-tag" type="button" data-value="example.com">example.com</button>
+            <button class="quick-tag" type="button" data-value="44d88612fea8a8f36de82e1278abb02f">示例 MD5</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel-card">
+        <div class="panel-head">
+          <div>
+            <h3>批量查询</h3>
+          </div>
+        </div>
+        <div class="panel-body">
+          <div class="field">
+            <label>批量输入</label>
+            <textarea id="batchIndicators" class="textarea textarea-compact" placeholder="8.8.8.8&#10;example.com&#10;44d88612fea8a8f36de82e1278abb02f"></textarea>
+          </div>
+          <div class="panel-actions">
+            <button id="batchSearchBtn" class="btn btn-primary" type="button">批量查询</button>
+            <button id="batchClearBtn" class="btn btn-default" type="button">清空</button>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <section class="panel-card result-panel-card">
+      <div class="panel-head panel-head-between">
+        <div>
+          <h3>实时结果面板</h3>
+        </div>
+        <div class="status-chip" id="resultStatusChip">待查询</div>
+      </div>
+      <div class="panel-body result-panel-body">
+        <div id="resultSummaryArea" class="result-empty">请输入指标并点击查询。</div>
+        <div id="resultListArea"></div>
+        <details class="json-card json-collapse">
+          <summary class="json-card-head">
+            <h4>原始 JSON</h4>
+            <button id="copyJsonBtn" class="btn btn-default btn-sm" type="button">复制结果</button>
+          </summary>
+          <pre id="rawJsonBox" class="json-box">{
+  "message": "请输入指标后开始查询"
+}</pre>
+        </details>
+      </div>
+    </section>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+(function () {
+  const singleInput = document.getElementById('singleIndicator');
+  const singleBtn = document.getElementById('singleSearchBtn');
+  const batchInput = document.getElementById('batchIndicators');
+  const batchBtn = document.getElementById('batchSearchBtn');
+  const batchClearBtn = document.getElementById('batchClearBtn');
+  const summaryArea = document.getElementById('resultSummaryArea');
+  const listArea = document.getElementById('resultListArea');
+  const rawJsonBox = document.getElementById('rawJsonBox');
+  const resultStatusChip = document.getElementById('resultStatusChip');
+  const copyJsonBtn = document.getElementById('copyJsonBtn');
+
+  let latestPayload = { message: '请输入指标后开始查询' };
+
+  const severityWeight = { low: 1, medium: 2, high: 3, critical: 4 };
+  const severityLabelMap = { low: '低危', medium: '中危', high: '高危', critical: '严重' };
+
+  function escapeHtml(value) {
+    return String(value ?? '')
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;')
+      .replaceAll("'", '&#39;');
+  }
+
+  function updateRawJson(payload) {
+    latestPayload = payload;
+    rawJsonBox.textContent = JSON.stringify(payload, null, 2);
+  }
+
+  function severityClass(sev) {
+    const value = String(sev || 'low').toLowerCase();
+    if (value === 'critical') return 'pill-critical';
+    if (value === 'high') return 'pill-high';
+    if (value === 'medium') return 'pill-medium';
+    return 'pill-low';
+  }
+
+  function getTopSeverity(results) {
+    let top = 'low';
+    for (const item of (results || [])) {
+      const sev = String(item.severity || 'low').toLowerCase();
+      if ((severityWeight[sev] || 0) > (severityWeight[top] || 0)) top = sev;
+    }
+    return top;
+  }
+
+  function renderSingleResult(payload) {
+    const results = payload.results || [];
+    const topSeverity = getTopSeverity(results);
+    const topLabel = severityLabelMap[topSeverity] || '低危';
+    const cacheText = payload.cache_hit ? '缓存命中' : '外部聚合查询';
+    resultStatusChip.textContent = results.length ? '已完成' : '无结果';
+
+    summaryArea.innerHTML = `
+      <div class="summary-grid">
+        <div class="summary-card">
+          <span class="summary-label">查询指标</span>
+          <strong class="summary-value">${escapeHtml(payload.indicator || '-')}</strong>
+          <span class="summary-sub">${escapeHtml(payload.indicator_type || '-')}</span>
+        </div>
+        <div class="summary-card">
+          <span class="summary-label">风险等级</span>
+          <strong class="summary-value">${escapeHtml(topLabel)}</strong>
+          <span class="summary-sub ${severityClass(topSeverity)}">综合判定</span>
+        </div>
+        <div class="summary-card">
+          <span class="summary-label">结果数量</span>
+          <strong class="summary-value">${results.length}</strong>
+          <span class="summary-sub">${escapeHtml(cacheText)}</span>
+        </div>
+      </div>
+    `;
+
+    if (!results.length) {
+      listArea.innerHTML = '<div class="result-empty minor-empty">未返回有效结果。</div>';
+      updateRawJson(payload);
+      return;
+    }
+
+    listArea.innerHTML = `
+      <div class="result-card-list">
+        ${results.map(item => `
+          <article class="result-card">
+            <div class="result-card-head">
+              <div>
+                <h4>${escapeHtml(item.source_name || '未知来源')}</h4>
+                <p>${escapeHtml(item.summary || '暂无摘要')}</p>
+              </div>
+              <span class="severity-pill ${severityClass(item.severity)}">${escapeHtml(severityLabelMap[String(item.severity || 'low').toLowerCase()] || '低危')}</span>
+            </div>
+            <div class="meta-grid">
+              <div><span>指标</span><strong>${escapeHtml(item.indicator || payload.indicator || '-')}</strong></div>
+              <div><span>类型</span><strong>${escapeHtml(item.indicator_type || payload.indicator_type || '-')}</strong></div>
+              <div><span>来源</span><strong>${item.cache ? '缓存' : '外部'}</strong></div>
+              <div><span>获取时间</span><strong>${escapeHtml(item.fetched_at || '-')}</strong></div>
+            </div>
+          </article>
+        `).join('')}
+      </div>
+    `;
+    updateRawJson(payload);
+  }
+
+  function renderBatchResult(payload) {
+    const items = payload.items || [];
+    resultStatusChip.textContent = items.length ? '批量完成' : '无结果';
+
+    summaryArea.innerHTML = `
+      <div class="summary-grid">
+        <div class="summary-card">
+          <span class="summary-label">批量条目</span>
+          <strong class="summary-value">${items.length}</strong>
+          <span class="summary-sub">已识别并查询</span>
+        </div>
+        <div class="summary-card">
+          <span class="summary-label">缓存命中</span>
+          <strong class="summary-value">${items.filter(i => i.cache_hit).length}</strong>
+          <span class="summary-sub">本地缓存优先</span>
+        </div>
+        <div class="summary-card">
+          <span class="summary-label">外部查询</span>
+          <strong class="summary-value">${items.filter(i => !i.cache_hit).length}</strong>
+          <span class="summary-sub">触发外部聚合</span>
+        </div>
+      </div>
+    `;
+
+    if (!items.length) {
+      listArea.innerHTML = '<div class="result-empty minor-empty">没有可查询的指标。</div>';
+      updateRawJson(payload);
+      return;
+    }
+
+    listArea.innerHTML = `
+      <div class="result-table-wrap">
+        <table class="result-table">
+          <thead>
+            <tr>
+              <th>指标</th>
+              <th>类型</th>
+              <th>命中数量</th>
+              <th>查询方式</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${items.map(item => `
+              <tr>
+                <td>${escapeHtml(item.indicator)}</td>
+                <td>${escapeHtml(item.indicator_type)}</td>
+                <td>${escapeHtml(item.result_count)}</td>
+                <td>${item.cache_hit ? '缓存命中' : '外部查询'}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+    updateRawJson(payload);
+  }
+
+  async function postJson(url, payload) {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    return response.json();
+  }
+
+  function setLoading(text) {
+    resultStatusChip.textContent = '查询中';
+    summaryArea.innerHTML = `<div class="result-empty">${escapeHtml(text)}</div>`;
+    listArea.innerHTML = '';
+  }
+
+  async function runSingleSearch() {
+    const indicator = (singleInput.value || '').trim();
+    if (!indicator) {
+      summaryArea.innerHTML = '<div class="result-empty">请先输入一个指标。</div>';
+      return;
+    }
+    setLoading('正在查询单条指标...');
+    try {
+      const payload = await postJson('/api/search', { indicator });
+      if (payload.error) throw new Error(payload.error);
+      renderSingleResult(payload);
+    } catch (error) {
+      resultStatusChip.textContent = '失败';
+      summaryArea.innerHTML = `<div class="alert alert-danger">查询失败：${escapeHtml(error.message || '未知错误')}</div>`;
+      updateRawJson({ error: error.message || 'unknown_error' });
+    }
+  }
+
+  async function runBatchSearch() {
+    const indicators = (batchInput.value || '').split('\n').map(v => v.trim()).filter(Boolean);
+    if (!indicators.length) {
+      summaryArea.innerHTML = '<div class="result-empty">请先输入至少一个指标。</div>';
+      return;
+    }
+    setLoading('正在批量查询指标...');
+    try {
+      const payload = await postJson('/api/batch-search', { indicators });
+      if (payload.error) throw new Error(payload.error);
+      renderBatchResult(payload);
+    } catch (error) {
+      resultStatusChip.textContent = '失败';
+      summaryArea.innerHTML = `<div class="alert alert-danger">批量查询失败：${escapeHtml(error.message || '未知错误')}</div>`;
+      updateRawJson({ error: error.message || 'unknown_error' });
+    }
+  }
+
+  if (singleBtn) singleBtn.addEventListener('click', runSingleSearch);
+  if (batchBtn) batchBtn.addEventListener('click', runBatchSearch);
+  if (batchClearBtn) batchClearBtn.addEventListener('click', () => { batchInput.value = ''; });
+
+  if (singleInput) singleInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      runSingleSearch();
+    }
+  });
+
+  if (batchInput) batchInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      runBatchSearch();
+    }
+  });
+
+  document.querySelectorAll('.quick-tag').forEach(btn => {
+    btn.addEventListener('click', () => {
+      singleInput.value = btn.dataset.value || '';
+      singleInput.focus();
+    });
+  });
+
+  if (copyJsonBtn) {
+    copyJsonBtn.addEventListener('click', async (event) => {
+      event.preventDefault();
+      try {
+        await navigator.clipboard.writeText(JSON.stringify(latestPayload, null, 2));
+        copyJsonBtn.textContent = '已复制';
+        setTimeout(() => copyJsonBtn.textContent = '复制结果', 1200);
+      } catch (e) {
+        copyJsonBtn.textContent = '复制失败';
+        setTimeout(() => copyJsonBtn.textContent = '复制结果', 1200);
+      }
+    });
+  }
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}审计日志 - 开源威胁情报智能分级搜索平台{% endblock %}
+{% block page_title %}审计日志{% endblock %}
+{% block page_desc %}查看最近 100 条系统操作审计记录{% endblock %}
+
+{% block content %}
+<div class="stack-page">
+  <section class="hero-card section-hero">
+    <div class="hero-copy">
+      <span class="eyebrow">Audit Logs</span>
+      <h2>系统操作审计总览</h2>
+    </div>
+    <div class="hero-stats">
+      <div class="hero-stat">
+        <span>最近日志数</span>
+        <strong>{{ logs|length }}</strong>
+      </div>
+      <div class="hero-stat">
+        <span>涉及用户</span>
+        <strong>{{ user_map|length }}</strong>
+      </div>
+      <div class="hero-stat">
+        <span>最近动作</span>
+        <strong>{% if logs %}{{ logs[0].action }}{% else %}-{% endif %}</strong>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel-card">
+    <div class="panel-head">
+      <div>
+        <h3>最近 100 条审计记录</h3>
+      </div>
+    </div>
+    <div class="panel-body table-panel-body">
+      <div class="table-shell">
+        <table class="modern-table">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>操作用户</th>
+              <th>动作</th>
+              <th>详情</th>
+              <th>时间</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% if logs %}
+              {% for item in logs %}
+              <tr>
+                <td>{{ item.id }}</td>
+                <td>{{ user_map.get(item.user_id, '未知用户') }}</td>
+                <td><span class="tag-pill">{{ item.action }}</span></td>
+                <td>{{ item.detail or '-' }}</td>
+                <td>{{ item.created_at }}</td>
+              </tr>
+              {% endfor %}
+            {% else %}
+              <tr>
+                <td colspan="5"><div class="empty-inline">暂无审计记录。</div></td>
+              </tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+</div>
+{% endblock %}

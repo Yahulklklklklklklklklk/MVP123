@@ -1,0 +1,179 @@
+{% extends "base.html" %}
+{% block title %}情报源管理 - 开源威胁情报智能分级搜索平台{% endblock %}
+{% block page_title %}情报源管理{% endblock %}
+{% block page_desc %}统一配置、启用、修改或删除外部威胁情报源{% endblock %}
+
+{% block content %}
+<div class="stack-page">
+  <section class="hero-card section-hero">
+    <div class="hero-copy">
+      <span class="eyebrow">Threat Feeds</span>
+      <h2>情报源统一配置与治理</h2>
+    </div>
+    <div class="hero-stats">
+      <div class="hero-stat">
+        <span>情报源总数</span>
+        <strong>{{ sources|length }}</strong>
+      </div>
+      <div class="hero-stat">
+        <span>启用中</span>
+        <strong>{{ sources | selectattr("enabled", "equalto", true) | list | length }}</strong>
+      </div>
+      <div class="hero-stat">
+        <span>禁用中</span>
+        <strong>{{ sources | rejectattr("enabled", "equalto", true) | list | length }}</strong>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel-card">
+    <div class="panel-head">
+      <div>
+        <h3>新增情报源</h3>
+      </div>
+    </div>
+    <div class="panel-body">
+      <form method="post" action="/admin/sources/add" class="form-grid source-create-grid">
+        <div class="field">
+          <label>名称</label>
+          <input class="input" type="text" name="name" placeholder="例如：AlienVault OTX Real" required>
+        </div>
+        <div class="field field-short">
+          <label>类型</label>
+          <select class="select" name="source_type" required>
+            <option value="mock_feed">mock_feed</option>
+            <option value="alienvault_otx">alienvault_otx</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Base URL</label>
+          <input class="input" type="text" name="base_url" placeholder="可选">
+        </div>
+        <div class="field">
+          <label>API Key</label>
+          <input class="input" type="text" name="api_key" placeholder="可选">
+        </div>
+        <div class="field field-mini">
+          <label>是否启用</label>
+          <select class="select" name="enabled">
+            <option value="true">true</option>
+            <option value="false">false</option>
+          </select>
+        </div>
+        <div class="field field-action">
+          <label>&nbsp;</label>
+          <button class="btn btn-primary btn-block" type="submit">添加情报源</button>
+        </div>
+      </form>
+    </div>
+  </section>
+
+  <section class="panel-card">
+    <div class="panel-head">
+      <div>
+        <h3>已配置情报源</h3>
+      </div>
+    </div>
+    <div class="panel-body table-panel-body">
+      <div class="table-shell">
+        <table class="modern-table">
+          <thead>
+            <tr>
+              <th>名称</th>
+              <th>类型</th>
+              <th>状态</th>
+              <th>Base URL</th>
+              <th>API Key</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in sources %}
+            <tr>
+              <td>
+                <div class="table-title">{{ item.name }}</div>
+                <div class="table-subtitle">ID: {{ item.id }}</div>
+              </td>
+              <td>{{ item.source_type }}</td>
+              <td>
+                {% if item.enabled %}
+                <span class="tag-pill tag-pill-green">启用</span>
+                {% else %}
+                <span class="tag-pill tag-pill-gray">禁用</span>
+                {% endif %}
+              </td>
+              <td>{{ item.base_url or '-' }}</td>
+              <td>{% if item.api_key %}已配置{% else %}未配置{% endif %}</td>
+              <td>
+                <div class="table-actions">
+                  <form method="post" action="/admin/sources/{{ item.id }}/toggle">
+                    <button class="btn btn-default btn-sm" type="submit">{% if item.enabled %}禁用{% else %}启用{% endif %}</button>
+                  </form>
+                  <button class="btn btn-default btn-sm" type="button" onclick="toggleSourceEditor('{{ item.id }}')">编辑</button>
+                  <form method="post" action="/admin/sources/{{ item.id }}/delete" onsubmit="return confirm('确认删除该情报源吗？');">
+                    <button class="btn btn-danger btn-sm" type="submit">删除</button>
+                  </form>
+                </div>
+              </td>
+            </tr>
+            <tr class="editor-row hidden" id="source-editor-{{ item.id }}">
+              <td colspan="6">
+                <div class="editor-card">
+                  <form method="post" action="/admin/sources/{{ item.id }}/update" class="form-grid source-edit-grid">
+                    <div class="field">
+                      <label>名称</label>
+                      <input class="input" type="text" name="name" value="{{ item.name }}" required>
+                    </div>
+                    <div class="field field-short">
+                      <label>类型</label>
+                      <select class="select" name="source_type" required>
+                        <option value="mock_feed" {% if item.source_type == 'mock_feed' %}selected{% endif %}>mock_feed</option>
+                        <option value="alienvault_otx" {% if item.source_type == 'alienvault_otx' %}selected{% endif %}>alienvault_otx</option>
+                      </select>
+                    </div>
+                    <div class="field">
+                      <label>Base URL</label>
+                      <input class="input" type="text" name="base_url" value="{{ item.base_url or '' }}" placeholder="可选">
+                    </div>
+                    <div class="field">
+                      <label>API Key</label>
+                      <input class="input" type="text" name="api_key" value="{{ item.api_key or '' }}" placeholder="可选">
+                    </div>
+                    <div class="field field-mini">
+                      <label>是否启用</label>
+                      <select class="select" name="enabled">
+                        <option value="true" {% if item.enabled %}selected{% endif %}>true</option>
+                        <option value="false" {% if not item.enabled %}selected{% endif %}>false</option>
+                      </select>
+                    </div>
+                    <div class="field field-action">
+                      <label>&nbsp;</label>
+                      <div class="editor-actions">
+                        <button class="btn btn-default" type="button" onclick="toggleSourceEditor('{{ item.id }}')">取消</button>
+                        <button class="btn btn-primary" type="submit">保存修改</button>
+                      </div>
+                    </div>
+                  </form>
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function toggleSourceEditor(id) {
+  const row = document.getElementById(`source-editor-${id}`);
+  if (!row) return;
+  const isHidden = row.classList.contains('hidden');
+  document.querySelectorAll('tr[id^="source-editor-"]').forEach(el => el.classList.add('hidden'));
+  if (isHidden) row.classList.remove('hidden');
+}
+</script>
+{% endblock %}
